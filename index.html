@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+
+<title>Edgewood Game Night Scanner</title>
+
+<script src="https://unpkg.com/html5-qrcode"></script>
+
+<style>
+
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+    font-family:Arial,Helvetica,sans-serif;
+}
+
+body{
+    background:#101820;
+    color:white;
+    text-align:center;
+    padding:20px;
+}
+
+h1{
+    margin-top:15px;
+    margin-bottom:10px;
+}
+
+#reader{
+    width:100%;
+    max-width:450px;
+    margin:auto;
+    border-radius:12px;
+    overflow:hidden;
+    background:white;
+}
+
+#status{
+    margin-top:20px;
+    font-size:20px;
+    font-weight:bold;
+}
+
+.success{
+    color:#00ff66;
+}
+
+.error{
+    color:#ff4d4d;
+}
+
+.wait{
+    color:#ffd633;
+}
+
+button{
+    margin-top:20px;
+    padding:12px 25px;
+    font-size:18px;
+    border:none;
+    border-radius:8px;
+    cursor:pointer;
+    background:#d71920;
+    color:white;
+}
+
+button:hover{
+    opacity:.9;
+}
+
+#volunteer{
+    margin-bottom:20px;
+    font-size:20px;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<h1>🎟️ Edgewood Game Night</h1>
+
+<div id="volunteer"></div>
+
+<div id="reader"></div>
+
+<div id="status" class="wait">
+Ready to Scan
+</div>
+
+<button onclick="changeVolunteer()">
+Change Volunteer
+</button>
+<script>
+
+const API =
+"https://script.google.com/macros/s/AKfycbyanwCx1hYDRaSNkbwmp2V4OflGRi5X5qqMSv-Jo3ZJxkL22by78CgxCqI8bbZ-1IeAwA/exec";
+
+let scanner;
+
+let scanning = false;
+
+let volunteer =
+localStorage.getItem("volunteer");
+
+if(!volunteer){
+
+    volunteer = prompt("Enter your name");
+
+    if(volunteer){
+
+        localStorage.setItem("volunteer",volunteer);
+
+    }
+
+}
+
+document.getElementById("volunteer").innerHTML =
+"<strong>Volunteer:</strong> " + volunteer;
+
+function changeVolunteer(){
+
+    const name =
+    prompt("Volunteer name",volunteer);
+
+    if(!name) return;
+
+    volunteer=name;
+
+    localStorage.setItem("volunteer",name);
+
+    document.getElementById("volunteer").innerHTML =
+    "<strong>Volunteer:</strong> " + volunteer;
+
+}
+
+function setStatus(message,css){
+
+    const box=document.getElementById("status");
+
+    box.className=css;
+
+    box.innerHTML=message;
+
+}
+
+</script>
+
+  <script>
+
+function startScanner(){
+
+    scanner = new Html5Qrcode("reader");
+
+    scanner.start(
+
+        {
+            facingMode:"environment"
+        },
+
+        {
+            fps:10,
+            qrbox:{
+                width:250,
+                height:250
+            }
+        },
+
+        onScanSuccess,
+
+        function(error){}
+
+    );
+
+}
+
+function onScanSuccess(decodedText){
+
+    if(scanning) return;
+
+    scanning=true;
+
+    setStatus("Checking ticket...","wait");
+
+    scanner.pause();
+
+    let ticket = decodedText;
+
+    try{
+
+        const url = new URL(decodedText);
+
+        const value = url.searchParams.get("ticket");
+
+        if(value){
+
+            ticket = value;
+
+        }
+
+    }catch(e){
+
+        // If it's not a URL, assume it's already the ticket number
+    }
+
+    checkTicket(ticket);
+
+}
+
+window.onload = startScanner;
+
+</script>
+
+  <script>
+
+async function checkTicket(ticket){
+
+    try{
+
+        const response = await fetch(
+            API +
+            "?api=checkin" +
+            "&ticket=" + encodeURIComponent(ticket) +
+            "&volunteer=" + encodeURIComponent(volunteer)
+        );
+
+        const data = await response.json();
+
+        if(data.success){
+
+            setStatus("✅ " + data.message,"success");
+
+            if(navigator.vibrate){
+                navigator.vibrate(200);
+            }
+
+        }else if(data.duplicate){
+
+            setStatus("🚫 " + data.message,"error");
+
+            if(navigator.vibrate){
+                navigator.vibrate([150,100,150]);
+            }
+
+        }else{
+
+            setStatus("❌ " + data.message,"error");
+
+            if(navigator.vibrate){
+                navigator.vibrate([300,150,300]);
+            }
+
+        }
+
+    }catch(err){
+
+        console.error(err);
+
+        setStatus(
+            "❌ Unable to contact server",
+            "error"
+        );
+
+    }
+
+    setTimeout(function(){
+
+        scanner.resume();
+
+        scanning=false;
+
+        setStatus("Ready to Scan","wait");
+
+    },2500);
+
+}
+
+</script>
+
+  </body>
+</html>
